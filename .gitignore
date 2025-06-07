@@ -1,0 +1,11 @@
+#Ignire the cmake-build-debug directory
+cmake-build-debug
+
+# Ignore the .vscode directory
+.vscode
+
+#Ignore the .idea directory
+.idea
+
+# Ignore the build directory
+build
