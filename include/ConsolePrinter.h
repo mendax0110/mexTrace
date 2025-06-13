@@ -1,80 +1,93 @@
-#ifndef MEXTRACE_CONSOLEPRINTER_H
-#define MEXTRACE_CONSOLEPRINTER_H
-
-#include "StackFrame.h"
+#pragma once
 #include <vector>
-#include <ostream>
+#include <memory>
+#include "StackFrame.h"
 #include <iostream>
+#include <string>
 
-/// @brief The mexTrace namespace contains classes and functions for capturing and printing stack traces. \namespace mex
-namespace mex
+/// @brief ConsolePrinter is a utility class for printing formatted messages to the console. \class ConsolePrinter
+class ConsolePrinter
 {
-    /// @brief Enum class representing different colors for console output. \enum Color
+public:
+
+    /// @brief Enum representing different text colors for console output. \enum Color
     enum class Color
     {
-        Reset,
-        Red,
-        Green,
-        Yellow,
-        Blue,
-        Magenta,
-        Cyan,
-        White,
-        BrightRed,
-        BrightGreen,
-        BrightYellow,
-        BrightBlue,
-        BrightMagenta,
-        BrightCyan,
-        BrightWhite
+        RED,
+        GREEN,
+        YELLOW,
+        BLUE,
+        MAGENTA,
+        CYAN,
+        WHITE,
+        DEFAULT
     };
 
-    /// @brief ConsolePrinter is responsible for printing stack traces to the console with optional color support. \class ConsolePrinter
-    class ConsolePrinter
-    {
-    public:
-        ConsolePrinter(std::ostream& os = std::cerr);
+    /**
+     * @brief Constructs a ConsolePrinter that outputs to the specified stream.
+     * @param os The output stream to use. Defaults to std::cout.
+     */
+    ConsolePrinter(std::ostream& os = std::cout);
 
-        /**
-         * @brief Prints the stack trace to the console.
-         * @param frames The stack frames to print.
-         */
-        void printStackTrace(const std::vector<StackFramePtr>& frames) const;
+    /**
+     * @brief Destructor for ConsolePrinter.
+     */
+    virtual ~ConsolePrinter() = default;
 
-        /**
-         * @brief Enables or disables colored output.
-         * @param enabled The flag to enable or disable color output.
-         */
-        void setColorEnabled(bool enabled);
+    /**
+     * @brief Prints a formatted stack trace to the console.
+     * @param frames The vector of StackFrame objects representing the stack trace.
+     */
+    void printStackTrace(const std::vector<StackFrame>& frames) const;
 
-        /**
-         * @brief Colorizes the given text with the specified color.
-         * @param text The text to colorize.
-         * @param color The color to apply to the text.
-         * @return A string with ANSI escape codes for the specified color.
-         */
-        std::string colorize(const std::string& text, Color color) const;
+    /**
+     * @brief Prints an error message to the console.
+     * @param message The error message to print.
+     */
+    void printError(const std::string& message) const;
 
-    private:
+    /**
+     * @brief Prints a success message to the console.
+     * @param message The success message to print.
+     */
+    void printSuccess(const std::string& message) const;
 
-        /**
-         * @brief Prints a single stack frame to the console.
-         * @param index The index of the frame in the stack trace.
-         * @param frame The stack frame to print.
-         */
-        void printFrame(size_t index, const StackFramePtr& frame) const;
+    /**
+     * @brief Prints an informational message to the console.
+     * @param message The informational message to print.
+     */
+    void printInfo(const std::string& message) const;
 
-        /**
-         * @brief Formats a stack frame for console output.
-         * @param index The index of the frame in the stack trace.
-         * @param frame The stack frame to format.
-         * @return A formatted string representing the stack frame.
-         */
-        std::string formatFrame(size_t index, const StackFramePtr& frame) const;
+    /**
+     * @brief Prints a warning message to the console.
+     * @param message The warning message to print.
+     */
+    void printWarning(const std::string& message) const;
 
-        std::ostream& m_os;
-        bool m_colorEnabled;
-    };
-} // namespace mex
+    /**
+     * @brief Colorizes the given text with the specified color and optional bold formatting.
+     * @param text The text to colorize.
+     * @param color The color to apply to the text.
+     * @param bold The optional flag to make the text bold. Defaults to false.
+     * @return A string containing the colorized text.
+     */
+    std::string colorize(const std::string& text, Color color, bool bold = false) const;
 
-#endif // MEXTRACE_CONSOLEPRINTER_H
+private:
+    std::ostream& outputStream;
+
+    /**
+     * @brief Returns the ANSI escape code for the specified color and boldness.
+     * @param color The color to use.
+     * @param bold The flag indicating whether the text should be bold.
+     * @return A string containing the ANSI escape code for the specified color and boldness.
+     */
+    static std::string getColorCode(Color color, bool bold) ;
+
+    /**
+     * @brief Prints a single stack frame to the console.
+     * @param frame The StackFrame object to print.
+     * @param index The index of the frame in the stack trace.
+     */
+    void printFrame(const StackFrame& frame, size_t index) const;
+};

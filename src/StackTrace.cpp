@@ -1,48 +1,140 @@
 #include "StackTrace.h"
-#include "SymbolResolver.h"
+#include <boost/stacktrace.hpp>
+#include <boost/stacktrace/stacktrace.hpp>
+#include <boost/stacktrace/frame.hpp>
 #include "PlatformUtils.h"
-#include <iostream>
+#include <stdexcept>
+#include "ErrorHandling.h"
+#include <sys/wait.h>
 
-using namespace mex;
-
-StackTrace::StackTrace(size_t maxDepth)
-        : m_maxDepth(maxDepth), m_resolver(SymbolResolver::create()), m_printer(std::cerr)
-{
-    if (!PlatformUtils::isPlatformSupported())
-    {
-        throw std::runtime_error("Unsupported platform: " + PlatformUtils::getPlatformName());
-    }
-}
-
-StackTrace::StackTrace(int pid, size_t maxDepth)
-        : m_maxDepth(maxDepth), m_resolver(SymbolResolver::createForProcess(pid)), m_printer(std::cerr)
+StackTrace::StackTrace(std::unique_ptr<SymbolReceiver> receiver)
+    : symbolReceiver(std::move(receiver))
 {
 
 }
 
-void StackTrace::capture()
+StackTrace::~StackTrace() = default;
+
+void StackTrace::setSymbolReceiver(std::unique_ptr<SymbolReceiver> receiver)
 {
-    m_frames = m_resolver->captureStackTrace(m_maxDepth);
-    if (m_frames.empty())
+    symbolReceiver = std::move(receiver);
+}
+
+std::vector<StackFrame> StackTrace::captureCurrentThread() const
+{
+    const boost::stacktrace::stacktrace st;
+    std::vector<StackFrame> frames;
+    frames.reserve(st.size());
+
+    for (const auto& frame : st)
     {
-        throw std::runtime_error("Failed to capture stack trace");
+        frames.emplace_back(
+            reinterpret_cast<uintptr_t>(frame.address()),
+            frame.name(),
+            frame.source_file(),
+            frame.source_line()
+        );
     }
-    for (auto& frame : m_frames)
+
+    if (symbolReceiver)
     {
-        if (!m_resolver->resolve(*frame))
+        resolveSymbols(frames);
+    }
+
+    return frames;
+}
+
+std::vector<StackFrame> StackTrace::captureThread(const pid_t tid) const
+{
+    if (tid == 0)
+    {
+        TRT_ERROR("Thread ID cannot be zero");
+    }
+
+    sigset_t old_mask;
+    if (sigprocmask(SIG_SETMASK, nullptr, &old_mask))
+    {
+        TRT_ERROR("Failed to get current signal mask");
+    }
+
+    sigset_t new_mask;
+    sigfillset(&new_mask);
+    if (sigprocmask(SIG_SETMASK, &new_mask, nullptr))
+    {
+        TRT_ERROR("Failed to block signals");
+    }
+
+    try
+    {
+        if (ptrace(PTRACE_ATTACH, tid, nullptr, nullptr) == -1)
         {
-            throw std::runtime_error("Failed to resolve stack frame: " + frame->toString());
+            TRT_ERROR("Failed to attach to thread " + std::to_string(tid));
+        }
+
+        int status;
+        if (waitpid(tid, &status, __WALL) == -1)
+        {
+            ptrace(PTRACE_DETACH, tid, nullptr, nullptr);
+            TRT_ERROR("Failed to wait for thread " + std::to_string(tid));
+        }
+
+        auto frames = captureCurrentThread();
+
+        if (ptrace(PTRACE_DETACH, tid, nullptr, nullptr) == -1)
+        {
+            TRT_ERROR("Failed to detach from thread " + std::to_string(tid));
+        }
+
+        if (sigprocmask(SIG_SETMASK, &old_mask, nullptr))
+        {
+            TRT_ERROR("Failed to restore signal mask");
+        }
+
+        return frames;
+    }
+    CATCH_WC(nullptr, "Failed to capture stack trace for thread " + std::to_string(tid),
+    {
+        ptrace(PTRACE_DETACH, tid, nullptr, nullptr);
+        sigprocmask(SIG_SETMASK, &old_mask, nullptr);
+        throw;
+    })
+}
+
+std::vector<StackFrame> StackTrace::captureProcess(const pid_t pid) const
+{
+    if (!PlatformUtils::isProcessRunning(pid))
+    {
+        TRT_ERROR("Process " + std::to_string(pid) + " is not running");
+    }
+
+    if (!PlatformUtils::attachToProcess(pid))
+    {
+        TRT_ERROR("Failed to attach to process " + std::to_string(pid));
+    }
+
+    try
+    {
+        auto frames = captureCurrentThread();
+        PlatformUtils::detachFromProcess(pid);
+        return frames;
+    }
+    CATCH_WC(nullptr, "Failed to capture stack trace for process " + std::to_string(pid),
+    {
+        PlatformUtils::detachFromProcess(pid);
+        throw;
+    })
+}
+
+void StackTrace::resolveSymbols(std::vector<StackFrame>& frames) const
+{
+    for (auto& frame : frames)
+    {
+        if (frame.functionName.empty())
+        {
+            const auto resolved = symbolReceiver->resolve(frame.address);
+            frame.functionName = resolved.functionName;
+            frame.sourceFile = resolved.sourceFile;
+            frame.lineNumber = resolved.lineNumber;
         }
     }
-    m_printer.printStackTrace(m_frames);
-}
-
-const std::vector<StackFramePtr>& StackTrace::getFrames() const
-{
-    return m_frames;
-}
-
-void StackTrace::print() const
-{
-    m_printer.printStackTrace(m_frames);
 }

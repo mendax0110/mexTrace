@@ -2,60 +2,92 @@
 #include <iomanip>
 #include <sstream>
 
-using namespace mex;
+ConsolePrinter::ConsolePrinter(std::ostream& os) : outputStream(os) {}
 
-ConsolePrinter::ConsolePrinter(std::ostream& os) : m_os(os), m_colorEnabled(true) {}
-
-void ConsolePrinter::printStackTrace(const std::vector<StackFramePtr>& frames) const
+void ConsolePrinter::printStackTrace(const std::vector<StackFrame>& frames) const
 {
+    outputStream << colorize("\nStack Trace:\n", Color::CYAN, true);
+
     for (size_t i = 0; i < frames.size(); ++i)
     {
-        printFrame(i, frames[i]);
+        printFrame(frames[i], i);
     }
+
+    outputStream << "\n";
 }
 
-void ConsolePrinter::setColorEnabled(bool enabled)
+void ConsolePrinter::printError(const std::string& message) const
 {
-    m_colorEnabled = enabled;
+    outputStream << colorize("[ERROR] ", Color::RED, true) << message << "\n";
 }
 
-void ConsolePrinter::printFrame(size_t index, const StackFramePtr& frame) const
+void ConsolePrinter::printSuccess(const std::string& message) const
 {
-    if (!frame) return;
-
-    std::string output = formatFrame(index, frame);
-    m_os << output << std::endl;
+    outputStream << colorize("[SUCCESS] ", Color::GREEN, true) << message << "\n";
 }
 
-std::string ConsolePrinter::formatFrame(size_t index, const StackFramePtr& frame) const
+void ConsolePrinter::printInfo(const std::string& message) const
 {
-    std::ostringstream oss;
-    oss << "[" << std::setw(3) << index << "] "
-        << colorize(frame->getFunctionName(), Color::BrightBlue) << " at "
-        << colorize(frame->getFileName(), Color::Cyan) << ":"
-        << colorize(std::to_string(frame->getLineNumber()), Color::Green);
-    return oss.str();
+    outputStream << colorize("[INFO] ", Color::BLUE, true) << message << "\n";
 }
 
-std::string ConsolePrinter::colorize(const std::string& text, Color color) const
+void ConsolePrinter::printWarning(const std::string& message) const
 {
-    if (!m_colorEnabled) return text;
+    outputStream << colorize("[WARNING] ", Color::YELLOW, true) << message << "\n";
+}
 
-    const char* code = "";
+std::string ConsolePrinter::colorize(const std::string& text, const Color color, const bool bold) const
+{
+    if (&outputStream != &std::cout)
+    {
+        return text;
+    }
+    return getColorCode(color, bold) + text + "\033[0m";
+}
+
+std::string ConsolePrinter::getColorCode(const Color color, const bool bold)
+{
+    std::string code = "\033[";
+    if (bold) code += "1;";
+    else code += "0;";
+
     switch (color)
     {
-        case Color::Red: code = "\033[31m"; break;
-        case Color::Green: code = "\033[32m"; break;
-        case Color::Yellow: code = "\033[33m"; break;
-        case Color::Blue: code = "\033[34m"; break;
-        case Color::Magenta: code = "\033[35m"; break;
-        case Color::Cyan: code = "\033[36m"; break;
-        case Color::White: code = "\033[37m"; break;
-        case Color::BrightRed: code = "\033[91m"; break;
-        case Color::BrightGreen: code = "\033[92m"; break;
-        case Color::Reset: code = "\033[0m"; break;
-        default: break;
+        case Color::RED: code += "31"; break;
+        case Color::GREEN: code += "32"; break;
+        case Color::YELLOW: code += "33"; break;
+        case Color::BLUE: code += "34"; break;
+        case Color::MAGENTA: code += "35"; break;
+        case Color::CYAN: code += "36"; break;
+        case Color::WHITE: code += "37"; break;
+        default: code += "39"; break;
     }
 
-    return code + text + "\033[0m";
+    return code + "m";
+}
+
+void ConsolePrinter::printFrame(const StackFrame& frame, const size_t index) const
+{
+    std::ostringstream oss;
+    oss << std::setw(2) << index << "# ";
+
+    if (frame.functionName.empty())
+    {
+        oss << "0x" << std::hex << frame.address;
+    }
+    else
+    {
+        oss << frame.functionName;
+        if (!frame.sourceFile.empty())
+        {
+            oss << " at " << frame.sourceFile;
+            if (frame.lineNumber != 0)
+            {
+                oss << ":" << std::dec << frame.lineNumber;
+            }
+        }
+    }
+
+    const Color frameColor = (index % 2) ? Color::MAGENTA : Color::CYAN;
+    outputStream << colorize(oss.str(), frameColor) << "\n";
 }

@@ -1,40 +1,94 @@
 #include "PlatformUtils.h"
-#include <iostream>
+#include <unistd.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <string.h>
+#include <fstream>
+#include <sstream>
 #include <stdexcept>
 
-using namespace mex;
-
-PlatformUtils::Platform PlatformUtils::getPlatform()
+bool PlatformUtils::isProcessRunning(const pid_t pid)
 {
-#ifdef _WIN32
-    return Platform::Windows;
-#elif defined(__linux__)
-    return Platform::Linux;
-#elif defined(__APPLE__) || defined(__MACH__)
-    return Platform::MacOS;
-#else
-    return Platform::Unknown;
-#endif
+    return kill(pid, 0) == 0;
 }
 
-bool PlatformUtils::isPlatformSupported()
+std::vector<pid_t> PlatformUtils::getAllProcesses()
 {
-    Platform platform = getPlatform();
-    if (platform == Platform::Unknown)
+    std::vector<pid_t> pids;
+    DIR* dir = opendir("/proc");
+
+    if (!dir)
     {
-        std::cerr << "Unsupported platform detected." << std::endl;
-        return false;
+        throw std::runtime_error("Failed to open /proc directory");
     }
-    return true;
+
+    dirent* entry;
+    while ((entry = readdir(dir)) != nullptr)
+    {
+        if (entry->d_type == DT_DIR)
+        {
+            char* end;
+            const long pid = strtol(entry->d_name, &end, 10);
+            if (*end == '\0')
+            {
+                pids.push_back(static_cast<pid_t>(pid));
+            }
+        }
+    }
+
+    closedir(dir);
+    return pids;
 }
 
-std::string PlatformUtils::getPlatformName()
+std::string PlatformUtils::getProcessName(const pid_t pid)
 {
-    switch (getPlatform())
+    const std::string path = "/proc/" + std::to_string(pid) + "/comm";
+    std::ifstream commFile(path);
+
+    if (!commFile)
     {
-        case Platform::Windows: return "Windows";
-        case Platform::Linux: return "Linux";
-        case Platform::MacOS: return "MacOS";
-        default: return "Unknown";
+        return "";
     }
+
+    std::string name;
+    std::getline(commFile, name);
+    return name;
+}
+
+bool PlatformUtils::attachToProcess(const pid_t pid)
+{
+    return ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) == 0;
+}
+
+void PlatformUtils::detachFromProcess(const pid_t pid)
+{
+    ptrace(PTRACE_DETACH, pid, nullptr, nullptr);
+}
+
+std::string PlatformUtils::getExecutablePath(const pid_t pid)
+{
+    char path[PATH_MAX];
+    const auto procPath = "/proc/" + std::to_string(pid) + "/exe";
+    const auto len = readlink(procPath.c_str(), path, sizeof(path) - 1);
+
+    if (len == -1)
+    {
+        return "";
+    }
+
+    path[len] = '\0';
+    return path;
+}
+
+std::string PlatformUtils::resolveSymbolicLink(const std::string& path)
+{
+    char resolved[PATH_MAX];
+    if (realpath(path.c_str(), resolved) == nullptr)
+    {
+        return path;
+    }
+    return resolved;
 }

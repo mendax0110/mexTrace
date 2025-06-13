@@ -1,55 +1,68 @@
-#ifndef MEXTRACE_STACKTRACE_H
-#define MEXTRACE_STACKTRACE_H
-
-#include "StackFrame.h"
-#include "SymbolResolver.h"
-#include "ConsolePrinter.h"
+#pragma once
 #include <vector>
+#include <memory>
+#include "StackFrame.h"
+#include "SymbolReceiver.h"
 
-/// @brief The mexTrace namespace contains classes and functions for capturing and printing stack traces. \namespace mex
-namespace mex
+/// @brief StackTrace is a utility class for capturing and resolving stack traces in a process or thread. \class StackTrace
+class StackTrace
 {
-    /// @brief StackTrace captures and manages a stack trace, allowing for retrieval and printing of stack frames. \class StackTrace
-    class StackTrace
+public:
+
+    /// @brief Enum representing different capture modes for stack traces. \enum CaptureMode
+    enum class CaptureMode
     {
-    public:
-
-        /**
-         * @brief Constructs a StackTrace object with a specified maximum depth.
-         * @param maxDepth
-         */
-        explicit StackTrace(size_t maxDepth);
-
-        /**
-         * @brief Constructs a StackTrace object for a specific process ID with a specified maximum depth.
-         * @param pid The process ID to attach to.
-         * @param maxDepth The maximum depth of the stack trace.
-         */
-        explicit StackTrace(int pid, size_t maxDepth = 64);
-
-        /**
-         * @brief Captures the current stack trace.
-         * @throws std::runtime_error if capturing the stack trace fails.
-         */
-        void capture();
-
-        /**
-         * @brief Gets the captured stack frames.
-         * @return A vector of shared pointers to StackFrame objects.
-         */
-        const std::vector<StackFramePtr>& getFrames() const;
-
-        /**
-         * @brief Prints the captured stack trace to the console.
-         */
-        void print() const;
-
-    private:
-        size_t m_maxDepth;
-        std::unique_ptr<SymbolResolver> m_resolver;
-        ConsolePrinter m_printer;
-        std::vector<StackFramePtr> m_frames;
+        CURRENT_THREAD,
+        ALL_THREADS,
+        SPECIFIC_THREAD,
+        PROCESS
     };
-} // namespace mex
 
-#endif // MEXTRACE_STACKTRACE_H
+    /**
+     * @brief Constructs a StackTrace object with an optional SymbolReceiver.
+     * @param receiver The SymbolReceiver to use for resolving symbols. If nullptr, default resolution will be used.
+     */
+    StackTrace(std::unique_ptr<SymbolReceiver> receiver = nullptr);
+
+    /**
+     * @brief Destructor for StackTrace.
+     */
+    ~StackTrace();
+
+    /**
+     * @brief Sets a custom SymbolReceiver for resolving symbols in stack frames.
+     * @param receiver The SymbolReceiver to set. If nullptr, default resolution will be used.
+     */
+    void setSymbolReceiver(std::unique_ptr<SymbolReceiver> receiver);
+
+    /**
+     * @brief Captures the current thread's stack trace.
+     * @return A vector of StackFrame objects representing the current thread's stack trace.
+     */
+    std::vector<StackFrame> captureCurrentThread() const;
+
+    /**
+     * @brief Captures the stack trace of a specific thread identified by its thread ID.
+     * @param tid The thread ID of the thread to capture.
+     * @return A vector of StackFrame objects representing the specified thread's stack trace.
+     */
+    std::vector<StackFrame> captureThread(pid_t tid) const;
+
+    /**
+     * @brief Captures the stack trace of a process identified by its process ID.
+     * @param pid The process ID of the process to capture.
+     * @return A vector of StackFrame objects representing the specified process's stack trace.
+     */
+    std::vector<StackFrame> captureProcess(pid_t pid) const;
+
+private:
+    std::unique_ptr<SymbolReceiver> symbolReceiver;
+    size_t maxDepth = 128;
+    CaptureMode captureMode = CaptureMode::CURRENT_THREAD;
+
+    /**
+     * @brief Resolves symbols in the provided stack frames using the SymbolReceiver.
+     * @param frames The vector of StackFrame objects to resolve symbols for.
+     */
+    void resolveSymbols(std::vector<StackFrame>& frames) const;
+};

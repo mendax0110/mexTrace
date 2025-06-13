@@ -1,54 +1,49 @@
-cmake_minimum_required(VERSION 3.12)
-project(mexTrace VERSION 1.0.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.15)
+project(mexTrace LANGUAGES CXX)
 
-# Options
-option(MEXTRACE_ENABLE_COLOR "Enable colored output" ON)
-option(MEXTRACE_BUILD_TESTS "Build tests" OFF)
-
-# Standard setup
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Platform-specific settings
-if(WIN32)
-    add_definitions(-DMEXTRACE_WINDOWS)
-elseif(APPLE)
-    add_definitions(-DMEXTRACE_MACOS)
-elseif(UNIX)
-    add_definitions(-DMEXTRACE_LINUX)
-endif()
+# Find Boost libraries
+find_package(Boost REQUIRED COMPONENTS stacktrace_backtrace)
+find_package(Threads REQUIRED)
 
-# Library sources
+# Configure compiler options
+add_compile_options(
+        -Wall
+        -Wextra
+        -Werror
+        -pedantic
+        -fPIC
+)
+
+# Include directories
+include_directories(
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${Boost_INCLUDE_DIRS}
+)
+
+# Source files
 set(SOURCES
-        src/StackFrame.cpp
-        src/StackTrace.cpp
-        src/SymbolResolver.cpp
         src/ConsolePrinter.cpp
         src/PlatformUtils.cpp
+        src/StackFrame.cpp
+        src/StackTrace.cpp
+        src/UnixSymbolReceiver.cpp
+        src/mexTrace.cpp
+        include/ErrorHandling.h
 )
 
-# Headers
-set(HEADERS
-        include/StackFrame.h
-        include/StackTrace.h
-        include/SymbolResolver.h
-        include/ConsolePrinter.h
-        include/PlatformUtils.h
+# Create executable
+add_executable(${PROJECT_NAME}  ${SOURCES})
+
+target_link_libraries(${PROJECT_NAME}
+        PRIVATE
+        ${Boost_LIBRARIES}
+        Threads::Threads
+        dl
 )
 
-if(WIN32)
-    list(APPEND SOURCES src/WindowsSymbolResolver.cpp)
-    list(APPEND HEADERS include/WindowsSymbolResolver.h)
-else()
-    list(APPEND SOURCES src/UnixSymbolResolver.cpp)
-    list(APPEND HEADERS include/UnixSymbolResolver.h)
-endif()
-
-# Create library
-add_library(mexTrace STATIC ${SOURCES} ${HEADERS})
-target_include_directories(mexTrace PUBLIC include)
-
-# Executable
-add_executable(mexTrace_cli src/mexTrace.cpp)
-target_link_libraries(mexTrace_cli mexTrace)
+# Install target
+#install(TARGETS ${PROJECT_NAME} DESTINATION bin)
