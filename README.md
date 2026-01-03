@@ -15,9 +15,9 @@ mexTrace is a command-line utility for capturing and displaying stack traces of 
 ## Installation
 
 ### Prerequisites
-- C++17 compatible compiler
-- CMake (version 3.10 or higher)
-- Unix-like operating system (Linux, macOS, etc.)
+- C++23 compatible compiler
+- CMake (version 3.25 or higher)
+- Unix-like operating system (Linux)
 
 ### Build Instructions
 ```bash
@@ -39,3 +39,6 @@ cmake ..
 ```bash
 cmake --build .
 ```
+
+### Note
+Targets must be build with '-fno-omit-frame-pointer -g' flags, otherwise mexTrace cannot diplay all infos.
