@@ -1,93 +1,117 @@
 #include "ConsolePrinter.h"
-#include <iomanip>
-#include <sstream>
+#include <format>
+#include <iostream>
+#include <print>
+#include <unistd.h>
 
-ConsolePrinter::ConsolePrinter(std::ostream& os) : outputStream(os) {}
+ConsolePrinter::ConsolePrinter(std::ostream& os) noexcept
+    : m_outputStream(os)
+    , m_useColors(&os == &std::cout && isatty(STDOUT_FILENO))
+{
+
+}
+
+ConsolePrinter::ConsolePrinter() noexcept
+    : m_outputStream(std::cout)
+    , m_useColors(isatty(STDOUT_FILENO))
+{
+
+}
 
 void ConsolePrinter::printStackTrace(const std::vector<StackFrame>& frames) const
 {
-    outputStream << colorize("\nStack Trace:\n", Color::CYAN, true);
+    std::println(m_outputStream, "{}", colorize("\nStack Trace:", Color::Cyan, true));
 
     for (size_t i = 0; i < frames.size(); ++i)
     {
         printFrame(frames[i], i);
     }
 
-    outputStream << "\n";
+    std::println(m_outputStream, "");
 }
 
-void ConsolePrinter::printError(const std::string& message) const
+void ConsolePrinter::printError(std::string_view message) const
 {
-    outputStream << colorize("[ERROR] ", Color::RED, true) << message << "\n";
+    std::println(m_outputStream, "{}{}", colorize("[ERROR] ", Color::Red, true), message);
 }
 
-void ConsolePrinter::printSuccess(const std::string& message) const
+void ConsolePrinter::printSuccess(std::string_view message) const
 {
-    outputStream << colorize("[SUCCESS] ", Color::GREEN, true) << message << "\n";
+    std::println(m_outputStream, "{}{}", colorize("[SUCCESS] ", Color::Green, true), message);
 }
 
-void ConsolePrinter::printInfo(const std::string& message) const
+void ConsolePrinter::printInfo(std::string_view message) const
 {
-    outputStream << colorize("[INFO] ", Color::BLUE, true) << message << "\n";
+    std::println(m_outputStream, "{}{}", colorize("[INFO] ", Color::Blue, true), message);
 }
 
-void ConsolePrinter::printWarning(const std::string& message) const
+void ConsolePrinter::printWarning(std::string_view message) const
 {
-    outputStream << colorize("[WARNING] ", Color::YELLOW, true) << message << "\n";
+    std::println(m_outputStream, "{}{}", colorize("[WARNING] ", Color::Yellow, true), message);
 }
 
-std::string ConsolePrinter::colorize(const std::string& text, const Color color, const bool bold) const
+std::string ConsolePrinter::colorize(const std::string_view text, const Color color, const bool bold) const
 {
-    if (&outputStream != &std::cout)
+    if (!m_useColors)
     {
-        return text;
+        return std::string(text);
     }
-    return getColorCode(color, bold) + text + "\033[0m";
+    return std::format("{}{}\033[0m", getColorCode(color, bold), text);
 }
 
-std::string ConsolePrinter::getColorCode(const Color color, const bool bold)
+std::string_view ConsolePrinter::getColorCode(const Color color, const bool bold)noexcept
 {
-    std::string code = "\033[";
-    if (bold) code += "1;";
-    else code += "0;";
-
-    switch (color)
+    if (bold)
     {
-        case Color::RED: code += "31"; break;
-        case Color::GREEN: code += "32"; break;
-        case Color::YELLOW: code += "33"; break;
-        case Color::BLUE: code += "34"; break;
-        case Color::MAGENTA: code += "35"; break;
-        case Color::CYAN: code += "36"; break;
-        case Color::WHITE: code += "37"; break;
-        default: code += "39"; break;
+        switch (color)
+        {
+            case Color::Red:     return "\033[1;31m";
+            case Color::Green:   return "\033[1;32m";
+            case Color::Yellow:  return "\033[1;33m";
+            case Color::Blue:    return "\033[1;34m";
+            case Color::Magenta: return "\033[1;35m";
+            case Color::Cyan:    return "\033[1;36m";
+            case Color::White:   return "\033[1;37m";
+            default:             return "\033[1;39m";
+        }
     }
-
-    return code + "m";
+    else
+    {
+        switch (color)
+        {
+            case Color::Red:     return "\033[0;31m";
+            case Color::Green:   return "\033[0;32m";
+            case Color::Yellow:  return "\033[0;33m";
+            case Color::Blue:    return "\033[0;34m";
+            case Color::Magenta: return "\033[0;35m";
+            case Color::Cyan:    return "\033[0;36m";
+            case Color::White:   return "\033[0;37m";
+            default:             return "\033[0;39m";
+        }
+    }
 }
 
 void ConsolePrinter::printFrame(const StackFrame& frame, const size_t index) const
 {
-    std::ostringstream oss;
-    oss << std::setw(2) << index << "# ";
+    std::string frameStr;
 
-    if (frame.functionName.empty())
+    if (!frame.hasSymbolInfo())
     {
-        oss << "0x" << std::hex << frame.address;
+        frameStr = std::format("{:2}# 0x{:x}", index, frame.getAddress());
     }
     else
     {
-        oss << frame.functionName;
-        if (!frame.sourceFile.empty())
+        frameStr = std::format("{:2}# {}", index, frame.getFunctionName());
+        if (!frame.getSourceFile().empty())
         {
-            oss << " at " << frame.sourceFile;
-            if (frame.lineNumber != 0)
+            frameStr += std::format(" at {}", frame.getSourceFile());
+            if (frame.getLineNumber() != 0)
             {
-                oss << ":" << std::dec << frame.lineNumber;
+                frameStr += std::format(":{}", frame.getLineNumber());
             }
         }
     }
 
-    const Color frameColor = (index % 2) ? Color::MAGENTA : Color::CYAN;
-    outputStream << colorize(oss.str(), frameColor) << "\n";
+    const auto frameColor = (index % 2) != 0 ? Color::Magenta : Color::Cyan;
+    std::println(m_outputStream, "{}", colorize(frameStr, frameColor));
 }

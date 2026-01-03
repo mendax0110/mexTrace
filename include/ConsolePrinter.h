@@ -1,9 +1,11 @@
 #pragma once
 #include <vector>
+#include <string>
+#include <string_view>
+#include <ostream>
+#include <cstdint>
 #include <memory>
 #include "StackFrame.h"
-#include <iostream>
-#include <string>
 
 /// @brief ConsolePrinter is a utility class for printing formatted messages to the console. \class ConsolePrinter
 class ConsolePrinter
@@ -11,28 +13,33 @@ class ConsolePrinter
 public:
 
     /// @brief Enum representing different text colors for console output. \enum Color
-    enum class Color
+    enum class Color : uint8_t
     {
-        RED,
-        GREEN,
-        YELLOW,
-        BLUE,
-        MAGENTA,
-        CYAN,
-        WHITE,
-        DEFAULT
+        Red,
+        Green,
+        Yellow,
+        Blue,
+        Magenta,
+        Cyan,
+        White,
+        Default
     };
 
     /**
      * @brief Constructs a ConsolePrinter that outputs to the specified stream.
      * @param os The output stream to use. Defaults to std::cout.
      */
-    ConsolePrinter(std::ostream& os = std::cout);
+    ConsolePrinter(std::ostream& os) noexcept;
+
+    /**
+     * @brief Default Ctor.
+     */
+    ConsolePrinter() noexcept;
 
     /**
      * @brief Destructor for ConsolePrinter.
      */
-    virtual ~ConsolePrinter() = default;
+    ~ConsolePrinter() = default;
 
     /**
      * @brief Prints a formatted stack trace to the console.
@@ -44,25 +51,25 @@ public:
      * @brief Prints an error message to the console.
      * @param message The error message to print.
      */
-    void printError(const std::string& message) const;
+    void printError(std::string_view message) const;
 
     /**
      * @brief Prints a success message to the console.
      * @param message The success message to print.
      */
-    void printSuccess(const std::string& message) const;
+    void printSuccess(std::string_view message) const;
 
     /**
      * @brief Prints an informational message to the console.
      * @param message The informational message to print.
      */
-    void printInfo(const std::string& message) const;
+    void printInfo(std::string_view message) const;
 
     /**
      * @brief Prints a warning message to the console.
      * @param message The warning message to print.
      */
-    void printWarning(const std::string& message) const;
+    void printWarning(std::string_view message) const;
 
     /**
      * @brief Colorizes the given text with the specified color and optional bold formatting.
@@ -71,18 +78,19 @@ public:
      * @param bold The optional flag to make the text bold. Defaults to false.
      * @return A string containing the colorized text.
      */
-    std::string colorize(const std::string& text, Color color, bool bold = false) const;
+    [[nodiscard]] std::string colorize(std::string_view text, Color color, bool bold = false) const;
 
 private:
-    std::ostream& outputStream;
+    std::ostream& m_outputStream;
+    bool m_useColors;
 
     /**
      * @brief Returns the ANSI escape code for the specified color and boldness.
      * @param color The color to use.
      * @param bold The flag indicating whether the text should be bold.
-     * @return A string containing the ANSI escape code for the specified color and boldness.
+     * @return A string_view containing the ANSI escape code for the specified color and boldness.
      */
-    static std::string getColorCode(Color color, bool bold) ;
+    [[nodiscard]] static std::string_view getColorCode(Color color, bool bold) noexcept;
 
     /**
      * @brief Prints a single stack frame to the console.

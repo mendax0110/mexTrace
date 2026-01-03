@@ -1,38 +1,31 @@
 #include "StackFrame.h"
-
 #include <utility>
 
-StackFrame::StackFrame(const uintptr_t addr, std::string  func,
-                       std::string  file, const size_t line)
-    : address(addr)
-    , functionName(std::move(func))
-    , sourceFile(std::move(file))
-    , lineNumber(line)
+StackFrame::StackFrame(
+    const std::uintptr_t addr,
+    std::string func,
+    std::string file,
+    const size_t line
+) noexcept
+    : m_address(addr)
+    , m_functionName(std::move(func))
+    , m_sourceFile(std::move(file))
+    , m_lineNumber(line)
 {
 
 }
 
-uintptr_t StackFrame::getAddress() const
+void StackFrame::setFunctionName(std::string name) noexcept
 {
-    return address;
+    m_functionName = std::move(name);
 }
 
-const std::string& StackFrame::getFunctionName() const
+void StackFrame::setSourceFile(std::string file) noexcept
 {
-    return functionName;
+    m_sourceFile = std::move(file);
 }
 
-const std::string& StackFrame::getSourceFile() const
+void StackFrame::setLineNumber(const std::size_t line) noexcept
 {
-    return sourceFile;
-}
-
-size_t StackFrame::getLineNumber() const
-{
-    return lineNumber;
-}
-
-bool StackFrame::operator<(const StackFrame& other) const
-{
-    return address < other.address;
+    m_lineNumber = line;
 }
